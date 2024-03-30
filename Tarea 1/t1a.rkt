@@ -50,7 +50,7 @@ Gramática BNF del lenguaje core:
   (minor-equal l r)
   (mayor-equal l r)
   (equal l r)
-  (dist l r)
+  (dist e)
   (si cond true false)
   (con bindings e))
 
@@ -66,7 +66,7 @@ Gramática BNF del lenguaje core:
 
 
 ; parse-fundef :: <s-expr> -> Fundef
-; 
+; Parsea una Fundef a partir de una s-expr valida, si no retorna error
 (define (parse-fundef src)
   (match src
     [(list 'define (list name) args) (fundef name '() (parse-expr args))]
@@ -82,6 +82,7 @@ Gramática BNF del lenguaje core:
     [(? symbol?) (id src)]
     [(? boolean?) (bool src)]
     [(list 'add1 x) (add1 (parse-expr x))]
+    [(list '! e) (dist (parse-expr e))]
     [(list '+ l r) (add (parse-expr l) (parse-expr r))]
     [(list '- l r) (sub (parse-expr l) (parse-expr r))]
     [(list '< l r) (minor (parse-expr l) (parse-expr r))]
@@ -90,7 +91,7 @@ Gramática BNF del lenguaje core:
     [(list '>= l r) (mayor-equal (parse-expr l) (parse-expr r))]
     [(list '= l r) (equal (parse-expr l) (parse-expr r))]
     [(list 'if cond t f) (si (parse-expr cond) (parse-expr t) (parse-expr f))]
-    [(list 'con b e) (con (map parse-binding b) (parse-expr e))]
+    [(list 'with (? list? b) e) (con (map parse-binding b) (parse-expr e))]
     [(list name) (app name '())]
     [(list name args ...) (app name (map parse-expr args))]
     [else (error "parse expr error")]))
@@ -107,8 +108,8 @@ Gramática BNF del lenguaje core:
 
 
 ;; parse-binding :: <s-expr> -> Binding
-;;
+;; Parsea un bindig a partir de una s-expr valida, sino retorna error
 (define (parse-binding src)
   (match src
-    [(list i e) (binding (id i) (parse-expr e))]
+    [(list (? symbol? i) e) (binding (id i) (parse-expr e))]
     [else (error "parse binding error")]))

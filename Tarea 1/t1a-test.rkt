@@ -13,12 +13,15 @@
 (test (parse-expr '5) (num 5))
 (test (parse-expr '-9) (num -9))
 (test (parse-expr 'x) (id 'x))
+(test (parse-expr '#f) (bool #f))
+(test (parse-expr '#t) (bool #t))
 
 ; unary number primitives
 (test (parse-expr '{add1 3}) (add1 (num 3)))
 (test (parse-expr '{add1 -15}) (add1 (num -15)))
 (test (parse-expr '{add1 y}) (add1 (id 'y)))
 (test (parse-expr '{add1 {add1 3}}) (add1 (add1 (num 3))))
+
 
 ; binary number primitives
 (test (parse-expr '{+ x -2})
@@ -29,6 +32,29 @@
       (add (add1 (num 3)) (sub (id 'z) (num 2))))
 (test (parse-expr '{add1 {- var {+ var 2}}})
       (add1 (sub (id 'var) (add (id 'var) (num 2)))))
+
+
+; booleans simple operator
+(test (parse-expr '{! #t}) (dist (bool #t)))
+(test (parse-expr '{< 5 6}) (minor (num 5) (num 6)))
+(test (parse-expr '{<= 3 6}) (minor-equal (num 3) (num 6)))
+(test (parse-expr '{> 5 9}) (mayor (num 5) (num 9)))
+(test (parse-expr '{>= 2 6}) (mayor-equal (num 2) (num 6)))
+(test (parse-expr '{= 3 3}) (equal (num 3) (num 3)))
+
+; conditional
+(test (parse-expr '{if #t 3 4}) (si (bool #t) (num 3) (num 4)))
+
+
+; with
+(test (parse-expr '{with {{x 1}} {+ x 1}})
+      (con (list (binding (id 'x) (num 1))) (add (id 'x) (num 1))))
+
+(test (parse-expr '{with {{x 5} {y 42} {z #t}} {if z {add1 x} {- y 2}}})
+      (con
+       (list (binding (id 'x) (num 5)) (binding (id 'y) (num 42)) (binding (id 'z) (bool #t)))
+       (si (id 'z) (add1 (id 'x)) (sub (id 'y) (num 2)))))
+      
 
 ; Function applications with zero and more arguments.
 (test (parse-expr '{f})
@@ -41,6 +67,9 @@
 ; An expression that combines everything.
 (test (parse-expr '{+ {- {fib 4} {add1 x}} {add1 {fact 5}}})
       (add (sub (app 'fib (list (num 4))) (add1 (id 'x))) (add1 (app 'fact (list (num 5))))))
+
+
+;
 
 ;;;;;;;;;;;;;;;;;;
 ;; parse-fundef ;;
@@ -107,3 +136,19 @@
  (list (fundef 'sum '(x y z) (add (id 'x) (add (id 'y) (id 'z))))
        (fundef 'add2 '(x) (add (add1 (id 'x)) (num 1))))
  (sub (app 'sum (list (num 2) (num -4) (num 1))) (app 'add2 (list (num 3))))))
+
+
+
+
+;;;;;;;;;;;;;;;;;;;
+;; parse-binding ;;
+;;;;;;;;;;;;;;;;;;;
+
+
+
+;bindigs with simple expresions
+(test (parse-binding '(x 9)) (binding (id 'x) (num 9)))
+(test (parse-binding '(x (+ 1 3))) (binding (id 'x) (add (num 1) (num 3))))
+
+
+
