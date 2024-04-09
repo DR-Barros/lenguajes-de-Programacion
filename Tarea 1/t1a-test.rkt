@@ -43,17 +43,19 @@
 (test (parse-expr '{= 3 3}) (equal (num 3) (num 3)))
 
 ; conditional
-(test (parse-expr '{if #t 3 4}) (si (bool #t) (num 3) (num 4)))
+(test (parse-expr '{if #t 3 4}) (if (bool #t) (num 3) (num 4)))
+(test (parse-expr '{if #f 3 4}) (if (bool #f) (num 3) (num 4)))
+(test (parse-expr '{if {<= 3 6} 3 4}) (if  (minor-equal (num 3) (num 6)) (num 3) (num 4)))
 
 
 ; with
 (test (parse-expr '{with {{x 1}} {+ x 1}})
-      (con (list (binding (id 'x) (num 1))) (add (id 'x) (num 1))))
+      (with (list (binding (id 'x) (num 1))) (add (id 'x) (num 1))))
 
 (test (parse-expr '{with {{x 5} {y 42} {z #t}} {if z {add1 x} {- y 2}}})
-      (con
+      (with
        (list (binding (id 'x) (num 5)) (binding (id 'y) (num 42)) (binding (id 'z) (bool #t)))
-       (si (id 'z) (add1 (id 'x)) (sub (id 'y) (num 2)))))
+       (if (id 'z) (add1 (id 'x)) (sub (id 'y) (num 2)))))
       
 
 ; Function applications with zero and more arguments.

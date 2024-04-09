@@ -51,8 +51,8 @@ Gramática BNF del lenguaje core:
   (mayor-equal l r)
   (equal l r)
   (dist e)
-  (si cond true false)
-  (con bindings e))
+  (if cond true false)
+  (with bindings e))
 
 (deftype Binding
   (binding id expr))
@@ -90,8 +90,8 @@ Gramática BNF del lenguaje core:
     [(list '<= l r) (minor-equal (parse-expr l) (parse-expr r))]
     [(list '>= l r) (mayor-equal (parse-expr l) (parse-expr r))]
     [(list '= l r) (equal (parse-expr l) (parse-expr r))]
-    [(list 'if cond t f) (si (parse-expr cond) (parse-expr t) (parse-expr f))]
-    [(list 'with (? list? b) e) (con (map parse-binding b) (parse-expr e))]
+    [(list 'if cond t f) (if (parse-expr cond) (parse-expr t) (parse-expr f))]
+    [(list 'with (? list? b) e) (with (map parse-binding b) (parse-expr e))]
     [(list name) (app name '())]
     [(list name args ...) (app name (map parse-expr args))]
     [else (error "parse expr error")]))
