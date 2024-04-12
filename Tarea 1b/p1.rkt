@@ -151,16 +151,65 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(id x) (env-lookup x env)]
     [(bool b) (boolV b)]
     [(pair l r) (pairV (interp l env funs) (interp r env funs))]
-    ; ...
+    [(add1 e) (+ (interp e env funs))]
+    [(add l r) (+ (interp l env funs) (interp r env funs))]
+    [(sub l r) (- (interp l env funs) (interp r env funs))]
+    [(lt l r) (< (interp l env funs) (interp r env funs))]
+    [(eq l r) (equal? (interp l env funs) (interp r env funs))]
+    [(not-new l) (not (interp l env funs))]
+    [(and-new l r) (and (interp l env funs) (interp r env funs))]
+    [(or-new l r) (or (interp l env funs) (interp r env funs))]
+    [(fst l) (car (interp l env funs))]
+    [(snd l) (cdr (interp l env funs))]
+    [(if-new c t f) (if (interp c env funs) (interp t env funs) (interp f env funs))]
+    [(with bindings body)
+     (def new-env (extend-env-binding bindings env env funs)) 
+     (interp body new-env funs)]
+    [(app f-name arg-expr)
+     (def (fundef _ the-arg the-body) (look-up f-name funs))
+     (def new-env (extend-env the-arg (interp arg-expr env funs) env))
+     (interp the-body new-env funs)]
     [_ (error "not yet implemented")]
     ))
 
+
+;; extend-env-binding
+(define (extend-env-binding bindings env env2 funs)
+  (match bindings
+    [(cons {id val} r) (extend-env r env (extend-env id (interp val env funs) env) funs)]
+    [_  (env2)]))
+
+
+
+
 ;; run :: s-expr -> Val
 (define (run src)
-  (interp (parse-prog src)))
+  (interp-prog (parse-prog src)))
 
+
+;; interp-prog :: prog -> Val
+(define (interp-prog p)
+  (match p
+    [(prog funs expr) (interp expr empty-env funs)]))
+
+
+
+;; look-up :: <sym> listof(FunDef) -> FunDef
+;; searches a function definition within a list of definitions
+(define (look-up f-name l)
+  (match l
+    [(list) (error 'look-up "Function ~a not found" f-name)]
+    [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
 
 
 ;; testeo de funciones
-(parse-expr 2)
-(interp (parse-expr 2) empty-env '())
+(run (list 1))
+
+
+(run '{
+             {define {sum x y z} {+ x {+ y z}}}
+             {define {cadr x} {fst {snd x}}}
+             {with {{x 9} {y {cons 1 {cons 3 4}}}}
+                   {sum x {fst y} {cadr y}} }
+             })
+             
