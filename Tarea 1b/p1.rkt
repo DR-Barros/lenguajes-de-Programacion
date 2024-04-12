@@ -29,6 +29,9 @@ Gramática BNF de la sintaxis concreta del lenguaje.
            | {if <expr> <expr> <expr>}
            | {with {{<id> <expr>}*} <expr>}
            | {<id> <expr>*}
+
+
+
 |#
 
 
@@ -64,6 +67,7 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 
 (deftype Prog
   (prog fundefs main))
+
 
 
 
@@ -140,17 +144,23 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 ;;;;;;;;;;;;;;;;;;;;
 
 
-;; interp :: ...
+;; interp :: 
 (define (interp e env funs)
   (match e
     [(num n) (numV n)]
     [(id x) (env-lookup x env)]
     [(bool b) (boolV b)]
+    [(pair l r) (pairV (interp l env funs) (interp r env funs))]
     ; ...
     [_ (error "not yet implemented")]
     ))
 
-;; run :: ...
+;; run :: s-expr -> Val
 (define (run src)
-  (error "Not implemented"))
+  (interp (parse-prog src)))
 
+
+
+;; testeo de funciones
+(parse-expr 2)
+(interp (parse-expr 2) empty-env '())
