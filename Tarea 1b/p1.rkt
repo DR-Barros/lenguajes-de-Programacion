@@ -144,8 +144,8 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 ;;;;;;;;;;;;;;;;;;;;
 
 
-;; interp :: <expr>
-;;
+;; interp :: Expr Env listof(FunDef) -> Val
+;; interpreta la expresion y obtiene su valor dado un ambiente y un listado de funciones
 (define (interp e env funs)
   (match e
     [(num n) (numV n)]
@@ -235,16 +235,10 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 
 
 ;; run :: s-expr -> Val
-;;
+;; ejecuta un programa (lo parsea y luego lo interpreta)
 (define (run src)
-  (interp-prog (parse-prog src)))
-
-
-;; interp-prog :: prog -> Val
-;;
-(define (interp-prog p)
-  (match p
-    [(prog funs expr) (interp expr empty-env funs)]))
+  (def (prog funs expr) (parse-prog src))
+  (interp expr empty-env funs))
 
 
 
