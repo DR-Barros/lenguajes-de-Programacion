@@ -144,50 +144,104 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 ;;;;;;;;;;;;;;;;;;;;
 
 
-;; interp :: 
+;; interp :: <expr>
+;;
 (define (interp e env funs)
   (match e
     [(num n) (numV n)]
     [(id x) (env-lookup x env)]
     [(bool b) (boolV b)]
     [(pair l r) (pairV (interp l env funs) (interp r env funs))]
-    [(add1 e) (+ (interp e env funs))]
-    [(add l r) (+ (interp l env funs) (interp r env funs))]
-    [(sub l r) (- (interp l env funs) (interp r env funs))]
-    [(lt l r) (< (interp l env funs) (interp r env funs))]
-    [(eq l r) (equal? (interp l env funs) (interp r env funs))]
-    [(not-new l) (not (interp l env funs))]
-    [(and-new l r) (and (interp l env funs) (interp r env funs))]
-    [(or-new l r) (or (interp l env funs) (interp r env funs))]
-    [(fst l) (car (interp l env funs))]
-    [(snd l) (cdr (interp l env funs))]
-    [(if-new c t f) (if (interp c env funs) (interp t env funs) (interp f env funs))]
+    [(add1 e)
+     (def expr (interp e env funs))
+     (match expr
+       [(numV n) (numV (+ n 1))]
+       [_ (error (format "Runtime type error: expected Number found ~a" (pp-val expr)))])]
+    [(add l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((numV l)(numV r)) (numV (+ l r))]
+       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
+       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
+    [(sub l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((numV l)(numV r)) (numV (- l r))]
+       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
+       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
+    [(lt l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((numV l)(numV r)) (boolV (< l r))]
+       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
+       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
+    [(eq l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((numV l)(numV r)) (boolV (equal? l r))]
+       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
+       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
+    [(not-new e)
+     (def expr (interp e env funs))
+     (match expr
+       [(boolV n) (boolV (not n))]
+       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val expr)))])]
+    [(and-new l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((boolV l)(boolV r)) (boolV (and l r))]
+       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
+       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
+    [(or-new l r)
+     (def left (interp l env funs))
+     (def rigth (interp r env funs))
+     (match* (left rigth)
+       [((boolV l)(boolV r)) (boolV (or l r))]
+       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
+       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
+    [(fst e)
+     (def expr (interp e env funs))
+     (match expr
+       [(pairV l r) l]
+       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
+    [(snd e)
+     (def expr (interp e env funs))
+     (match expr
+       [(pairV l r) r]
+       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
+    [(if-new c t f)
+     (def cond (interp c env funs))
+     (match cond
+       [(boolV c) (if c (interp t env funs) (interp f env funs))]
+       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val cond)))])]
     [(with bindings body)
-     (def new-env (extend-env-binding bindings env env funs)) 
+     (def new-env (foldl (λ (b e) (match b
+                                    [(binding id val) (extend-env id (interp val env funs) e)])) env bindings))
      (interp body new-env funs)]
-    [(app f-name arg-expr)
-     (def (fundef _ the-arg the-body) (look-up f-name funs))
-     (def new-env (extend-env the-arg (interp arg-expr env funs) env))
-     (interp the-body new-env funs)]
-    [_ (error "not yet implemented")]
+    [(app f-name args-expr)
+     (def (fundef _ the-args the-body) (look-up f-name funs))
+     (if (equal? (length the-args) (length args-expr))
+     (interp the-body (generate-new-env env the-args args-expr funs) funs)
+     (error (format "Arity mismatch: function ~a expected ~a arguments, received ~a" f-name (length the-args) (length args-expr))))]
     ))
 
-
-;; extend-env-binding
-(define (extend-env-binding bindings env env2 funs)
-  (match bindings
-    [(cons {id val} r) (extend-env r env (extend-env id (interp val env funs) env) funs)]
-    [_  (env2)]))
-
-
+(define (generate-new-env env the-args args-expr funs)
+  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) env the-args args-expr))
 
 
 ;; run :: s-expr -> Val
+;;
 (define (run src)
   (interp-prog (parse-prog src)))
 
 
 ;; interp-prog :: prog -> Val
+;;
 (define (interp-prog p)
   (match p
     [(prog funs expr) (interp expr empty-env funs)]))
@@ -198,18 +252,8 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 ;; searches a function definition within a list of definitions
 (define (look-up f-name l)
   (match l
-    [(list) (error 'look-up "Function ~a not found" f-name)]
+    [(list) (error 'look-up "Undefined function: ~a" f-name)]
     [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
 
 
-;; testeo de funciones
-(run (list 1))
 
-
-(run '{
-             {define {sum x y z} {+ x {+ y z}}}
-             {define {cadr x} {fst {snd x}}}
-             {with {{x 9} {y {cons 1 {cons 3 4}}}}
-                   {sum x {fst y} {cadr y}} }
-             })
-             
