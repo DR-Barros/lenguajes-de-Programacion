@@ -1,7 +1,174 @@
 #lang play
 (require "p1.rkt")
+(require "env.rkt")
 
 (print-only-errors #t)
+
+;;;;;;;;;;;;;;;;;;;;;
+;; test interprete ;;
+;;;;;;;;;;;;;;;;;;;;;
+
+;; test numero
+(test (interp (parse-expr 1) empty-env '()) (numV 1))
+(test (interp (parse-expr -341) empty-env '()) (numV -341))
+(test (interp (parse-expr 0) empty-env '()) (numV 0))
+
+
+;; test boolean
+(test (interp (parse-expr #f) empty-env '()) (boolV #f))
+(test (interp (parse-expr #t) empty-env '()) (boolV #t))
+
+;; test pair
+(test
+ (interp (parse-expr '(cons #t 2)) empty-env '())
+ (pairV (boolV #t) (numV 2)))
+
+(test
+ (interp (parse-expr '(cons 5 (cons #t 2))) empty-env '())
+ (pairV (numV 5) (pairV (boolV #t) (numV 2))))
+
+
+;; test id
+(test
+ (interp (id 'x) (extend-env 'x (numV 10) empty-env) '())
+ (numV 10))
+(test
+ (interp (id 'x) (extend-env 'x (boolV #t) empty-env) '())
+ (boolV #t))
+
+
+
+;; test add 1
+(test
+ (interp (parse-expr '(add1 2)) empty-env '())
+ (numV 3))
+(test/exn
+ (interp (parse-expr '(add1 (cons #t 2))) empty-env '())
+ "Runtime type error: expected Number found")
+
+;; test suma
+(test
+ (interp (parse-expr '(+ 1 5)) empty-env '())
+ (numV 6))
+(test
+ (interp (parse-expr '(+ 1 x)) (extend-env 'x (numV 10) empty-env) '())
+ (numV 11))
+(test/exn
+ (interp (parse-expr '(+ #t 5)) empty-env '())
+ "Runtime type error: expected Number found")
+
+
+;; test resta
+(test
+ (interp (parse-expr '(- 10 5)) empty-env '())
+ (numV 5))
+
+(test
+ (interp (parse-expr '(- x 6)) (extend-env 'x (numV 10) empty-env) '())
+ (numV 4))
+
+(test/exn
+ (interp (parse-expr '(- 10 (cons 1 2))) empty-env '())
+ "Runtime type error: expected Number found")
+
+;; test menor
+(test
+ (interp (parse-expr '(< 10 5)) empty-env '())
+ (boolV #f))
+
+(test
+ (interp (parse-expr '(< 10 10)) empty-env '())
+ (boolV #f))
+
+(test
+ (interp (parse-expr '(< 10 15)) empty-env '())
+ (boolV #t))
+
+
+;; test igual
+(test
+ (interp (parse-expr '(= 10 5)) empty-env '())
+ (boolV #f))
+
+(test
+ (interp (parse-expr '(= 10 10)) empty-env '())
+ (boolV #t))
+
+(test
+ (interp (parse-expr '(= 10 15)) empty-env '())
+ (boolV #f))
+
+
+;; test not equal
+(test
+ (interp (parse-expr '(!(= 10 15))) empty-env '())
+ (boolV #t))
+
+(test
+ (interp (parse-expr '(!(< 10 15))) empty-env '())
+ (boolV #f))
+
+
+;; test or
+(test
+ (interp (parse-expr '(|| #f (= 10 15))) empty-env '())
+ (boolV #f))
+(test
+ (interp (parse-expr '(|| #t (= 10 15))) empty-env '())
+ (boolV #t))
+
+;; test and
+(test
+ (interp (parse-expr '(&& #f (< 10 15))) empty-env '())
+ (boolV #f))
+(test
+ (interp (parse-expr '(&& #t (< 10 15))) empty-env '())
+ (boolV #t))
+
+;; test first
+(test
+ (interp (parse-expr '(fst (cons #t 2))) empty-env '())
+ (boolV #t))
+
+(test
+ (interp (parse-expr '(fst (cons 5 (cons #t 2)))) empty-env '())
+ (numV 5) )
+
+;; test second
+(test
+ (interp (parse-expr '(snd (cons #t 2))) empty-env '())
+ (numV 2))
+
+(test
+ (interp (parse-expr '(snd (cons 5 (cons #t 2)))) empty-env '())
+ (pairV (boolV #t) (numV 2)))
+
+;; test if
+(test
+ (interp (parse-expr '(if #t (+ 1 1) 3)) empty-env '())
+ (numV 2))
+
+(test
+ (interp (parse-expr '(if #f 2 (- 5 2))) empty-env '())
+ (numV 3))
+
+;; test with
+(test
+ (interp (parse-expr '(with ((x (add1 1))) (+ x 2))) empty-env '())
+ (numV 4))
+
+(test
+ (interp (parse-expr '(with ((x 2) (y 5)) (+ x y))) empty-env '())
+ (numV 7))
+         
+;; para testear integraciones más complejas del interprete se realizara directamente en run
+
+
+;;;;;;;;;;;;;;
+;; test run ;;
+;;;;;;;;;;;;;;
+
+
 
 ;; test numero
 (test (run '{5}) (numV 5))
@@ -72,7 +239,10 @@
 (test/exn (run '((if 5 1 2))) "Runtime type error: expected Boolean found")
 
 ;; test fundef
-
+(test (run '{
+  {define {bar p} {! p}}
+  {bar #t}
+}) (boolV #f))
 (test/exn (run '{{foo 2 3}}) "Undefined function: ")
 (test/exn (run '{
   {define {bar p} {! p}}

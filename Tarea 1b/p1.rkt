@@ -231,7 +231,7 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     ))
 
 (define (generate-new-env env the-args args-expr funs)
-  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) env the-args args-expr))
+  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) empty-env the-args args-expr))
 
 
 ;; run :: s-expr -> Val
@@ -248,6 +248,5 @@ Gramática BNF de la sintaxis concreta del lenguaje.
   (match l
     [(list) (error 'look-up "Undefined function: ~a" f-name)]
     [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
-
 
 

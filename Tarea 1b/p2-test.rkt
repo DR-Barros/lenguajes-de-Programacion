@@ -2,6 +2,21 @@
 
 (require "p2.rkt")
 
+
+;;;;;;;;;;;;;;;;;
+;;  PARSE-ARG  ;;
+;;;;;;;;;;;;;;;;;
+
+(parse-arg  '(x : Num))
+
+
+
+
+
+#|
+
+
+
 (test (typecheck (prog '() (num 5))) (numT))
 (test (typecheck (prog '() (bool #t))) (boolT))
 
@@ -68,3 +83,4 @@
           "Static type error: expected Num found Bool")
 
 
+|#

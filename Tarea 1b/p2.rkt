@@ -5,15 +5,21 @@
 #| LUEGO MODIFIQUELO SIGUIENDO LAS INSTRUCCIONES |#
 ;;;;
 
+
 #|
 
-Gramática BNF de la sintaxis concreta del lenguaje.
+Extensión de la gramática del lenguaje:
+
+<prog> y <expr> no cambian
+
+
+<fundef> ::= {define {<id> <arg>*} : <type> <expr>} 
+ 
+<arg>    ::= {<id> : <type>} 
+ 
+<binding> ::= {<id> [: <type>] <expr>}
 
 <prog>   ::= {<fundef>* <expr>}
-
-<fundef> ::= {define {<id> <arg>*} : <type> <expr>}
-
-<arg>    ::= {<id> : <type>} 
 
 <expr>   ::= <num>
            | <id>
@@ -30,17 +36,11 @@ Gramática BNF de la sintaxis concreta del lenguaje.
            | {fst <expr>}
            | {snd <expr>}
            | {if <expr> <expr> <expr>}
-           | {with {<binding>*} <expr>}
+           | {with {{<id> <expr>}*} <expr>}
            | {<id> <expr>*}
-
-
-<binding> ::= {<id> [: <type>] <expr>}
  
 <type>   ::= Num | Bool | {Pair <type> <type>}
-
-
 |#
-
 
 ;;;;;;;;;;;;;
 ;;   AST   ;;
@@ -48,14 +48,13 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 
 
 (deftype Fundef
-  (fundef name args : type body))
+  (fundef name args type body))
 
 (deftype Arg
-  (arg id : type))
+  (arg id type))
 
 (deftype Binding
-  (binding id expr)
-  (binding-type id : type expr))
+  (binding id type expr))
 
 (deftype Expr
   (num n)
@@ -80,45 +79,54 @@ Gramática BNF de la sintaxis concreta del lenguaje.
   (prog fundefs main))
 
 
+
+
 ;; Tipo inductivo para los valores del lenguaje.
 (deftype Val
   (numV n)
   (boolV b)
   (pairV lV rV))
 
+
+
 (deftype Type
   (numT)
   (boolT)
   (pairT lT rT))
 
+
+
+
 ;;;;;;;;;;;;;;
 ;;  PARSER  ;;
 ;;;;;;;;;;;;;;
 
-;parse-type
-(define (parse-type type)
-  (match type
-    [(Num) (numT)]
-    [(Bool) (boolT)]
-    [(Pair l r) (pairT (parse-type l) (parse-type r))])) 
+(define (parse-type t)
+  (match t
+    [(list 'Num) (numT)]
+    [(list 'Bool) (boolT)]
+    [(list 'Pair l r) (pairT (parse-type l) (parse-type r))]
+    [_ (error "Tipo no valido")]))
+    
 
-; parse-arg s-expr -> Arg
-(define (parse-arg arg)
-  (match arg
-    [(id : x) (arg id : (parse-type x))]))
-    
-    
+; parse-arg :: s-expr -> Arg
+(define (parse-arg  a)
+  (match a
+    [(list x : y) (arg (id x) (parse-type y))]
+    [_ (error "error al parsear arg")]))
 
 ; parse-fundef :: s-expr -> Fundef
 (define (parse-fundef src)
   (match src
-    [(list 'define (list fname args ...) : type body) (fundef fname args : type (parse-expr body))]
+    [(list 'define (list fname args ...) body) (fundef fname (map parse-arg args) (parse-expr body))]
    ))
 
 ; parse-binding :: s-expr -> Binding
 (define (parse-binding src)
   (match src
-    [(list id expr) (binding id (parse-expr expr))]))
+    [(list id expr) (binding id #f (parse-expr expr))]
+    [(list id : type expr) (binding id type expr)]))
+
 
 ; parse-expr :: s-expr -> Expr
 (define (parse-expr src)
@@ -149,147 +157,6 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(list fundefs ... expr) (prog (map parse-fundef fundefs) (parse-expr expr))]))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;
-;;   PRETTY-PRINTING   ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;
-
-
-; pp-val :: Val -> String
-; Dado un valor del lenguaje, retorna
-; su representación como String.
-(define (pp-val val)
-  (match val
-    [(numV n) (number->string n)]
-    [(boolV b) (format "~a" b)]
-    [(pairV f s) (format "{cons ~a ~a}" (pp-val f) (pp-val s))]
-    ))
-
-
-
-;;;;;;;;;;;;;;;;;;;;
-;;   INTÉRPRETE   ;;
-;;;;;;;;;;;;;;;;;;;;
-
-
-;; interp :: Expr Env listof(FunDef) -> Val
-;; interpreta la expresion y obtiene su valor dado un ambiente y un listado de funciones
-(define (interp e env funs)
-  (match e
-    [(num n) (numV n)]
-    [(id x) (env-lookup x env)]
-    [(bool b) (boolV b)]
-    [(pair l r) (pairV (interp l env funs) (interp r env funs))]
-    [(add1 e)
-     (def expr (interp e env funs))
-     (match expr
-       [(numV n) (numV (+ n 1))]
-       [_ (error (format "Runtime type error: expected Number found ~a" (pp-val expr)))])]
-    [(add l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (numV (+ l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(sub l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (numV (- l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(lt l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (boolV (< l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(eq l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (boolV (equal? l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(not-new e)
-     (def expr (interp e env funs))
-     (match expr
-       [(boolV n) (boolV (not n))]
-       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val expr)))])]
-    [(and-new l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((boolV l)(boolV r)) (boolV (and l r))]
-       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
-       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
-    [(or-new l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((boolV l)(boolV r)) (boolV (or l r))]
-       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
-       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
-    [(fst e)
-     (def expr (interp e env funs))
-     (match expr
-       [(pairV l r) l]
-       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
-    [(snd e)
-     (def expr (interp e env funs))
-     (match expr
-       [(pairV l r) r]
-       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
-    [(if-new c t f)
-     (def cond (interp c env funs))
-     (match cond
-       [(boolV c) (if c (interp t env funs) (interp f env funs))]
-       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val cond)))])]
-    [(with bindings body)
-     (def new-env (foldl (λ (b e) (match b
-                                    [(binding id val) (extend-env id (interp val env funs) e)])) env bindings))
-     (interp body new-env funs)]
-    [(app f-name args-expr)
-     (def (fundef _ the-args the-body) (look-up f-name funs))
-     (if (equal? (length the-args) (length args-expr))
-     (interp the-body (generate-new-env env the-args args-expr funs) funs)
-     (error (format "Arity mismatch: function ~a expected ~a arguments, received ~a" f-name (length the-args) (length args-expr))))]
-    ))
-
-(define (generate-new-env env the-args args-expr funs)
-  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) env the-args args-expr))
-
-
-;; run :: s-expr -> Val
-;; ejecuta un programa (lo parsea y luego lo interpreta)
-(define (run src)
-  (def (prog funs expr) (parse-prog src))
-  (interp expr empty-env funs))
-
-
-
-;; look-up :: <sym> listof(FunDef) -> FunDef
-;; searches a function definition within a list of definitions
-(define (look-up f-name l)
-  (match l
-    [(list) (error 'look-up "Undefined function: ~a" f-name)]
-    [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
-
-
-#|
-
-Extensión de la gramática del lenguaje:
-
-<prog> y <expr> no cambian
-
-
-<fundef> ::= {define {<id> <arg>*} : <type> <expr>} listo
- 
-<arg>    ::= {<id> : <type>} listo
- 
-
-|#
 
 
 
@@ -297,13 +164,85 @@ Extensión de la gramática del lenguaje:
 
 
 ;; typecheck-expr :: ...
-(define (typecheck-expr e)
+(define (typecheck-expr e envT funs)
   (match e
     [(num n) (numT)]
     [(bool b) (boolT)]
-    ; ...
+    [(id n) (env-lookupT n envT)]
+    [(pair l r) (pairT (typecheck-expr l envT funs) (typecheck-expr r envT funs))]
+    [(add1 a)
+     (if (equal? (typecheck-expr a envT funs) numT)
+         (numT)
+         (error "error en add1"))]
+    [(add l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left numT) (equal? rigth numT))
+         (numT)
+         (error "error en add"))]
+    [(sub l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left numT) (equal? rigth numT))
+         (numT)
+         (error "error en sub"))]
+    [(lt l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left numT) (equal? rigth numT))
+         (boolT)
+         (error "error en lt"))]
+    [(eq l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left numT) (equal? rigth numT))
+         (boolT)
+         (error "error en eq"))]
+    [(not-new x)
+     (if (equal? (typecheck-expr x envT funs) boolT)
+         (boolT)
+         (error "error en not-new"))]
+    [(and-new l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left boolT) (equal? rigth boolT))
+         (boolT)
+         (error "error en and-new"))]
+    [(or-new l r)
+     (def left (typecheck-expr l envT funs))
+     (def rigth (typecheck-expr r envT funs))
+     (if (and (equal? left boolT) (equal? rigth boolT))
+         (boolT)
+         (error "error en or-new"))]
+    [(fst e)
+     (def expr (typecheck-expr e envT funs))
+     (match expr
+       [(pairT lT rT) lT]
+       [_ (error "error de first")])]
+    [(snd e)
+     (def expr (typecheck-expr e envT funs))
+     (match expr
+       [(pairT lT rT) rT]
+       [_ (error "error de first")])]
+    [(if-new c t f)
+     (def cond (typecheck-expr c envT funs))
+     (def true (typecheck-expr t envT funs))
+     (def false (typecheck-expr f envT funs))
+     (if (equal? cond boolT)
+         (if (equal? t f) t (error "los tipos no calzan"))
+         (error "error de condicion"))]
+    [(with bindings body)
+     (def new-env (foldl (λ (b e) (match b
+                                   [(binding id type expr) (extend-envT id (typecheck-expr type envT funs) e)])) envT bindings))
+     (typecheck-expr body new-env funs)]
+    [(app f-name args)
+     (def (fundef _ args type body) (look-up f-name funs))
+     (type)]
     [_ (error "not yet implemented")]
     ))
+
+(define (generate-new-env envT args args-expr funs)
+  (foldl (λ (id type e) (extend-envT id (typecheck type envT funs) e)) empty-envT args args-expr))
 
 ;; typecheck-fundef :: ...
 (define (typecheck-fundef f)
@@ -313,4 +252,34 @@ Extensión de la gramática del lenguaje:
 ;; typecheck :: ...
 (define (typecheck prog)
   (error "not yet implemented"))
+
+
+
+#|-----------------------------
+Environment abstract data type
+
+empty-env  :: Env
+extend-env :: Sym Type Env -> Env
+env-lookup :: Sym Env -> Type
+
+representation BNF:
+<env> ::= (mtEnv)
+| (aEnv <id> <type> <env>)
+|#
+(deftype EnvT
+  (mtEnvT)
+  (aEnvT id type envT))
+
+(def empty-envT  (mtEnvT))
+
+(def extend-envT aEnvT)
+
+(define (env-lookupT x envT)
+  (match envT
+    [(mtEnvT) (error 'env-lookupT "free identifier: ~a" x)]
+    [(aEnvT id type rest)
+     (if (symbol=? id x)
+         type
+         (env-lookupT x rest))]))
+
 
