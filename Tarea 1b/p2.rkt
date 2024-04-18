@@ -4,7 +4,7 @@
 #|  COPIE Y PEGUE SU CODIGO DE LA PREGUNTA UNO   |#
 #| LUEGO MODIFIQUELO SIGUIENDO LAS INSTRUCCIONES |#
 ;;;;
-
+(require "env.rkt")
 
 #|
 
@@ -95,6 +95,22 @@ Extensión de la gramática del lenguaje:
   (pairT lT rT))
 
 
+;;;;;;;;;;;;;;;;;;;;;;;;;
+;;   PRETTY-PRINTING   ;;
+;;;;;;;;;;;;;;;;;;;;;;;;;
+
+
+; pp-val :: Type -> String
+; Dado un tipo del lenguaje, retorna
+; su representación como String.
+(define (pp-type type)
+  (match type
+    [(numT) "Num"]
+    [(boolT) "Bool"]
+    [(pairT f s) (format "{Pair ~a ~a}" (pp-type f) (pp-type s))]
+    ))
+
+
 
 
 ;;;;;;;;;;;;;;
@@ -103,9 +119,9 @@ Extensión de la gramática del lenguaje:
 
 (define (parse-type t)
   (match t
-    [(list 'Num) (numT)]
-    [(list 'Bool) (boolT)]
-    [(list 'Pair l r) (pairT (parse-type l) (parse-type r))]
+    ['Num (numT)]
+    ['Bool (boolT)]
+    [(list Pair l r) (pairT (parse-type l) (parse-type r))]
     [_ (error "Tipo no valido")]))
     
 
@@ -118,14 +134,16 @@ Extensión de la gramática del lenguaje:
 ; parse-fundef :: s-expr -> Fundef
 (define (parse-fundef src)
   (match src
-    [(list 'define (list fname args ...) body) (fundef fname (map parse-arg args) (parse-expr body))]
+    [(list 'define (list fname args ...) : type body) (fundef fname (map parse-arg args) (parse-type type) (parse-expr body))]
+    [_ (error "error al parsear fundef")]
    ))
 
 ; parse-binding :: s-expr -> Binding
 (define (parse-binding src)
   (match src
     [(list id expr) (binding id #f (parse-expr expr))]
-    [(list id : type expr) (binding id type expr)]))
+    [(list id : type expr) (binding id (parse-type type) (parse-expr expr))]
+    [_ (error "error al parsear binding")]))
 
 
 ; parse-expr :: s-expr -> Expr
@@ -149,15 +167,16 @@ Extensión de la gramática del lenguaje:
                               (parse-expr t)
                               (parse-expr f))]
     [(list 'with (list bindings ...) body) (with (map parse-binding bindings) (parse-expr body))]
-    [(list name args ...) (app name (map parse-expr args))]))
+    [(list name args ...) (app name (map parse-expr args))]
+    [_ (error "error al parsear expr")]
+    ))
 
 ; parse-prog :: s-expr -> Prog
 (define (parse-prog src)
   (match src
-    [(list fundefs ... expr) (prog (map parse-fundef fundefs) (parse-expr expr))]))
-
-
-
+    [(list fundefs ... expr) (prog (map parse-fundef fundefs) (parse-expr expr))]
+    [_ (error "error al parsear prog")]
+    ))
 
 
 
@@ -168,118 +187,113 @@ Extensión de la gramática del lenguaje:
   (match e
     [(num n) (numT)]
     [(bool b) (boolT)]
-    [(id n) (env-lookupT n envT)]
+    [(id n) (env-lookup n envT)]
     [(pair l r) (pairT (typecheck-expr l envT funs) (typecheck-expr r envT funs))]
     [(add1 a)
-     (if (equal? (typecheck-expr a envT funs) numT)
+     (if (equal? (typecheck-expr a envT funs) (numT))
          (numT)
-         (error "error en add1"))]
+         (error (format "Static type error: operator add1 expected Num found ~a" (pp-type (typecheck-expr a envT funs)))))]
     [(add l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left numT) (equal? rigth numT))
-         (numT)
-         (error "error en add"))]
+     (match* (left rigth)
+       [((numT) (numT)) (numT)]
+       [(_ (numT)) (error (format "Static type error: operator + expected Num found ~a" (pp-type left)))]
+       [((numT) _) (error (format "Static type error: operator + expected Num found ~a" (pp-type rigth)))])]
     [(sub l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left numT) (equal? rigth numT))
-         (numT)
-         (error "error en sub"))]
+     (match* (left rigth)
+       [((numT) (numT)) (numT)]
+       [(_ (numT)) (error (format "Static type error: operator - expected Num found ~a" (pp-type left)))]
+       [((numT) _) (error (format "Static type error: operator - expected Num found ~a" (pp-type rigth)))])]
     [(lt l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left numT) (equal? rigth numT))
-         (boolT)
-         (error "error en lt"))]
+     (match* (left rigth)
+       [((numT) (numT)) (boolT)]
+       [(_ (numT)) (error (format "Static type error: operator < expected Num found ~a" (pp-type left)))]
+       [((numT) _) (error (format "Static type error: operator < expected Num found ~a" (pp-type rigth)))])]
     [(eq l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left numT) (equal? rigth numT))
-         (boolT)
-         (error "error en eq"))]
+     (match* (left rigth)
+       [((numT) (numT)) (boolT)]
+       [(_ (numT)) (error (format "Static type error: operator = expected Num found ~a" (pp-type left)))]
+       [((numT) _) (error (format "Static type error: operator = expected Num found ~a" (pp-type rigth)))])]
     [(not-new x)
-     (if (equal? (typecheck-expr x envT funs) boolT)
+     (if (equal? (typecheck-expr x envT funs) (boolT))
          (boolT)
-         (error "error en not-new"))]
+         (error (format "Static type error: operator ! expected Bool found ~a" (pp-type (typecheck-expr x envT funs)))))]
     [(and-new l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left boolT) (equal? rigth boolT))
-         (boolT)
-         (error "error en and-new"))]
+     (match* (left rigth)
+       [((boolT) (boolT)) (boolT)]
+       [(_ (boolT)) (error (format "Static type error: operator && expected Bool found ~a" (pp-type left)))]
+       [((boolT) _) (error (format "Static type error: operator && expected Bool found ~a" (pp-type rigth)))])]
     [(or-new l r)
      (def left (typecheck-expr l envT funs))
      (def rigth (typecheck-expr r envT funs))
-     (if (and (equal? left boolT) (equal? rigth boolT))
-         (boolT)
-         (error "error en or-new"))]
+     (match* (left rigth)
+       [((boolT) (boolT)) (boolT)]
+       [(_ (boolT)) (error (format "Static type error: operator || expected Bool found ~a" (pp-type left)))]
+       [((boolT) _) (error (format "Static type error: operator || expected Bool found ~a" (pp-type rigth)))])]
     [(fst e)
      (def expr (typecheck-expr e envT funs))
      (match expr
        [(pairT lT rT) lT]
-       [_ (error "error de first")])]
+       [_ (error (format "Static type error: operator fst expected Pair found ~a" (pp-type expr)))])]
     [(snd e)
      (def expr (typecheck-expr e envT funs))
      (match expr
        [(pairT lT rT) rT]
-       [_ (error "error de first")])]
+       [_ (error (format "Static type error: operator snd expected Pair found ~a" (pp-type expr)))])]
     [(if-new c t f)
      (def cond (typecheck-expr c envT funs))
      (def true (typecheck-expr t envT funs))
      (def false (typecheck-expr f envT funs))
      (if (equal? cond boolT)
-         (if (equal? t f) t (error "los tipos no calzan"))
-         (error "error de condicion"))]
+         (if (equal? t f) t (error (error (format "Static type error: expected ~a found ~a" (pp-type true) (pp-type false)))))
+         (error (format "Static type error: expected Bool found ~a" (pp-type cond))))]
     [(with bindings body)
      (def new-env (foldl (λ (b e) (match b
-                                   [(binding id type expr) (extend-envT id (typecheck-expr type envT funs) e)])) envT bindings))
+                                   [(binding id type expr)
+                                    (cond
+                                      [(equal? type #f) (extend-env id (typecheck-expr expr envT funs) e)]
+                                      [(equal? type (typecheck-expr expr envT funs)) (extend-env id type e)]
+                                      [else (error (format "Static type error: expected ~a found ~a" (pp-type type) (pp-type (typecheck-expr expr envT funs))))])])) envT bindings))
      (typecheck-expr body new-env funs)]
     [(app f-name args)
      (def (fundef _ args type body) (look-up f-name funs))
      (type)]
-    [_ (error "not yet implemented")]
+    [_ (error "no encontre la expresión :(")]
     ))
 
-(define (generate-new-env envT args args-expr funs)
-  (foldl (λ (id type e) (extend-envT id (typecheck type envT funs) e)) empty-envT args args-expr))
+(define (generate-new-env envT args funs)
+  (foldl (λ (a e) (match a
+                    [(arg id type) (extend-env id type e)])) envT args))
 
-;; typecheck-fundef :: ...
-(define (typecheck-fundef f)
-  ; ...
-  (error "not yet implemented"))
+;; typecheck-fundef :: Fundef list[FunDef] -> Type
+(define (typecheck-fundef f funs)
+  (def (fundef name args type body) f)
+  (def envT (generate-new-env empty-env args funs))
+  (if (equal? type (typecheck-expr body envT funs))
+      type
+      (error "tipos distintos")))
 
-;; typecheck :: ...
-(define (typecheck prog)
-  (error "not yet implemented"))
+;; typecheck :: Prog -> Type
+(define (typecheck p)
+  (match p
+    [(prog funs expr)(typecheck-expr expr empty-env funs)]
+    [_ (error "error al machear prog")]))
 
 
-
-#|-----------------------------
-Environment abstract data type
-
-empty-env  :: Env
-extend-env :: Sym Type Env -> Env
-env-lookup :: Sym Env -> Type
-
-representation BNF:
-<env> ::= (mtEnv)
-| (aEnv <id> <type> <env>)
-|#
-(deftype EnvT
-  (mtEnvT)
-  (aEnvT id type envT))
-
-(def empty-envT  (mtEnvT))
-
-(def extend-envT aEnvT)
-
-(define (env-lookupT x envT)
-  (match envT
-    [(mtEnvT) (error 'env-lookupT "free identifier: ~a" x)]
-    [(aEnvT id type rest)
-     (if (symbol=? id x)
-         type
-         (env-lookupT x rest))]))
+;; look-up :: <sym> listof(FunDef) -> FunDef
+;; searches a function definition within a list of definitions
+(define (look-up f-name l)
+  (match l
+    [(list) (error 'look-up "Undefined function: ~a" f-name)]
+    [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
 
 

@@ -2,18 +2,48 @@
 
 (require "p2.rkt")
 
+(print-only-errors #t)
 
 ;;;;;;;;;;;;;;;;;
 ;;  PARSE-ARG  ;;
 ;;;;;;;;;;;;;;;;;
 
-(parse-arg  '(x : Num))
+
+;; num
+(test (typecheck (parse-prog '{3})) (numT))
+;; bool
+(test (typecheck (parse-prog '{#t})) (boolT))
+;; pair
+(test (typecheck (parse-prog '{(cons 3 #t)})) (pairT (numT) (boolT)))
+;; add1
+(test (typecheck (parse-prog '{(add1 3)})) (numT))
+(test/exn (typecheck (parse-prog '{(add1 #t)})) "")
+;; add
+(test (typecheck (parse-prog '{(+ 1 3)})) (numT))
+(test/exn (typecheck (parse-prog '{(+ #t 3)})) "")
+(test/exn (typecheck (parse-prog '{(+ 5 #t)})) "")
+;; sub
+(test (typecheck (parse-prog '{(- 1 3)})) (numT))
+;; lt
+(test (typecheck (parse-prog '{(< 1 3)})) (boolT))
+;; eq
+(test (typecheck (parse-prog '{(= 1 3)})) (boolT))
+;; not
+(test (typecheck (parse-prog '{(! #f)})) (boolT))
+;; and
+(test (typecheck (parse-prog '{(&& #t #f)})) (boolT))
+;; or
+(test (typecheck (parse-prog '{(|| #t #f)})) (boolT))
+;; first
+(test (typecheck (parse-prog '{(fst (cons 3 #t))})) (numT))
+;; second
+(test (typecheck (parse-prog '{(snd (cons 3 #t))})) (boolT))
+
+;; with
+(test (typecheck (parse-prog '{{with {{z : Num 42}}
+                                         z}})) (numT))
 
 
-
-
-
-#|
 
 
 
@@ -82,5 +112,3 @@
                                          z}}))
           "Static type error: expected Num found Bool")
 
-
-|#
