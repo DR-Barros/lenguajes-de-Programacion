@@ -230,6 +230,9 @@ Gramática BNF de la sintaxis concreta del lenguaje.
      (error (format "Arity mismatch: function ~a expected ~a arguments, received ~a" f-name (length the-args) (length args-expr))))]
     ))
 
+
+;; generate-new-env :: Env Listof(Expr)Listof(Expr) Listof(FunDef) -> Env
+;; genera un nuevo ambiente para entrar en una función
 (define (generate-new-env env the-args args-expr funs)
   (foldl (λ (id val e) (extend-env id (interp val env funs) e)) empty-env the-args args-expr))
 
@@ -249,4 +252,7 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(list) (error 'look-up "Undefined function: ~a" f-name)]
     [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
 
-
+(run '{
+  {define {bar {p}} {! p}}
+  {bar #t}
+})
