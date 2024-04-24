@@ -4,10 +4,6 @@
 
 (print-only-errors #t)
 
-;;;;;;;;;;;;;;;;;
-;;  PARSE-ARG  ;;
-;;;;;;;;;;;;;;;;;
-
 
 ;; num
 (test (typecheck (parse-prog '{3})) (numT))
@@ -17,27 +13,40 @@
 (test (typecheck (parse-prog '{(cons 3 #t)})) (pairT (numT) (boolT)))
 ;; add1
 (test (typecheck (parse-prog '{(add1 3)})) (numT))
-(test/exn (typecheck (parse-prog '{(add1 #t)})) "")
+(test/exn (typecheck (parse-prog '{(add1 #t)})) "Static type error: operator add1 expected Num found Bool")
 ;; add
 (test (typecheck (parse-prog '{(+ 1 3)})) (numT))
-(test/exn (typecheck (parse-prog '{(+ #t 3)})) "")
-(test/exn (typecheck (parse-prog '{(+ 5 #t)})) "")
+(test/exn (typecheck (parse-prog '{(+ #t 3)})) "Static type error: operator + expected Num found")
+(test/exn (typecheck (parse-prog '{(+ 5 #t)})) "Static type error: operator + expected Num found")
 ;; sub
 (test (typecheck (parse-prog '{(- 1 3)})) (numT))
+(test/exn (typecheck (parse-prog '{(- #t 3)})) "Static type error: operator - expected Num found")
+(test/exn (typecheck (parse-prog '{(- 5 #t)})) "Static type error: operator - expected Num found")
 ;; lt
 (test (typecheck (parse-prog '{(< 1 3)})) (boolT))
+(test/exn (typecheck (parse-prog '{(< #t 3)})) "Static type error: operator < expected Num found")
+(test/exn (typecheck (parse-prog '{(< 5 #t)})) "Static type error: operator < expected Num found")
 ;; eq
 (test (typecheck (parse-prog '{(= 1 3)})) (boolT))
+(test/exn (typecheck (parse-prog '{(= #t 3)})) "Static type error: operator = expected Num found")
+(test/exn (typecheck (parse-prog '{(= 5 #t)})) "Static type error: operator = expected Num found")
 ;; not
 (test (typecheck (parse-prog '{(! #f)})) (boolT))
+(test/exn (typecheck (parse-prog '{(! 1)})) "Static type error: operator ! expected Bool found Num")
 ;; and
 (test (typecheck (parse-prog '{(&& #t #f)})) (boolT))
+(test/exn (typecheck (parse-prog '{(&& #t 3)})) "Static type error: operator && expected Bool found")
+(test/exn (typecheck (parse-prog '{(&& 5 #t)})) "Static type error: operator && expected Bool found")
 ;; or
 (test (typecheck (parse-prog '{(|| #t #f)})) (boolT))
+(test/exn (typecheck (parse-prog '{(|| #t 3)})) "Static type error: operator || expected Bool found")
+(test/exn (typecheck (parse-prog '{(|| 5 #t)})) "Static type error: operator || expected Bool found")
 ;; first
 (test (typecheck (parse-prog '{(fst (cons 3 #t))})) (numT))
+(test (typecheck (parse-prog '{(fst (cons #t 10))})) (boolT))
 ;; second
 (test (typecheck (parse-prog '{(snd (cons 3 #t))})) (boolT))
+(test (typecheck (parse-prog '{(snd (cons #t 10))})) (numT))
 
 ;; with
 (test (typecheck (parse-prog '{{with {{z : Num 42}}
