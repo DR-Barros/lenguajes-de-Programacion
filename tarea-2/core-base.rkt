@@ -56,8 +56,7 @@
     [(id x) (env-lookup x env)]
     [(printn e) 
       (def (numV n) (interp e env))
-      (println2 n)
-      (println n)
+      ((print-fn) n)
       (numV n)]
     [(app fun-expr arg-expr)
      (match (interp fun-expr env)
@@ -93,48 +92,22 @@
 
 ;; Parte 1 Testing de efectos
 
+
 (deftype Result 
     (result val log))
 
+(define print-fn (make-parameter println))
 
-#|
-;; definiciión de un log global
-(define log (box '()))
-
-;; println-g :: Number -> Void
-;; funcion que toma un numero y lo agrega al log global
-(define (println-g n)
-  (set-box! log (cons n (unbox log))))
-
-;; interp-g :: Expr -> Result
-;; función que vacia el box global, interpreta una expresión y guarda los prints correspondientes en el box
-(define (interp-g e)
-  (set-box! log '())
-  (interp e empty-env))
-
-
-;; testeo de la salida de impresión
-(test (interp-g {printn {num 4}}) (numV 4))
-(test (unbox log) '(4))
-;; nos aseguramos que luego de cada ejecución se vacie el log global
-(test (interp-g {printn {num 5}}) (numV 5))
-(test (unbox log) '(5))
-|#
-
-
-(define printer (make-parameter println))
-
-(define (println2 msg)
-  ((printer) msg))
 
 (define (interp-p expr)
-  (let ([local-log '()])  ; Iniciar log local como una lista vacía
-    (parameterize ([printer (lambda (msg) (set! local-log (cons msg local-log)))])  ; Redefinir la impresión para acumular en local-log
-      (let ([result (interp expr empty-env)])  ; Ejecutar interp que usará el nuevo printer
-        (values result (reverse local-log))))))  ; Devolver el resultado y el log
+  (define log (box '()))
+  (define (log-print n)
+      (set-box! log (cons n (unbox log))))
+  (parameterize ([print-fn log-print])
+    (let ([val (interp expr empty-env)])
+      (result val (reverse (unbox log))))))
 
-#|
-(define (interp-p e)
-  (parameterize ([log  '()])
-  (interp e empty-env)))
-    |#
+
+;; test parte 1
+(test (interp-p {printn {num 5}}) (result (numV 5) '(5)))
+
