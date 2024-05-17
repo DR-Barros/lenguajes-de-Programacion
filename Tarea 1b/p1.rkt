@@ -122,9 +122,9 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(list fundefs ... expr) (prog (map parse-fundef fundefs) (parse-expr expr))]))
 
 
-;;;;;;;;;;;;;;;;;;;;;;;;;
-;;   PRETTY-PRINTING   ;;
-;;;;;;;;;;;;;;;;;;;;;;;;;
+;;;;;;;;;;;;;;;;;;;;;;;
+;;   AUX Functions   ;;
+;;;;;;;;;;;;;;;;;;;;;;;
 
 
 ; pp-val :: Val -> String
@@ -136,6 +136,106 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(boolV b) (format "~a" b)]
     [(pairV f s) (format "{cons ~a ~a}" (pp-val f) (pp-val s))]
     ))
+
+
+;; error-msg :: String Val -> Error
+;; devuelve el mensaje de error en tiempo de ejecución
+(define (error-msg word v)
+  (error (format "Runtime type error: expected ~a found ~a" word (pp-val v))))
+
+;; eval-add :: NumV NumV -> NumV
+;; suma dos NumV o entrega un error
+(define (eval-add l r)
+  (match* (l r)
+    [((numV l)(numV r)) (numV (+ l r))]
+    [(_ (numV r)) (error-msg "Number" l)]
+    [((numV l) _) (error-msg "Number" r)]))
+
+;; eval-sub :: NumV NumV -> NumV
+;; resta dos NumV o entrega un error
+(define (eval-sub l r)
+  (match* (l r)
+    [((numV l)(numV r)) (numV (- l r))]
+    [(_ (numV r)) (error-msg "Number" l)]
+    [((numV l) _) (error-msg "Number" r)]))
+
+;; eval-lt :: NumV NumV -> BoolV
+;; evalua si un NumV es menor a otro o da un error si no son NumV
+(define (eval-lt l r)
+  (match* (l r)
+    [((numV l)(numV r)) (boolV (< l r))]
+    [(_ (numV r)) (error-msg "Number" l)]
+    [((numV l) _) (error-msg "Number" r)]))
+
+;; eval-eq :: NumV NumV -> BoolV
+;; evalua si un numV es igual a otro o da un error si no son NumV
+(define (eval-eq l r)
+  (match* (l r)
+    [((numV l)(numV r)) (boolV (= l r))]
+    [(_ (numV r)) (error-msg "Number" l)]
+    [((numV l) _) (error-msg "Number" r)]))
+
+;; eval-not :: BoolV -> BoolV
+;; negación de un BoolV o error
+(define (eval-not expr)
+  (match expr
+    [(boolV n) (boolV (not n))]
+    [_ (error-msg "Boolean" expr)]))
+
+
+;; eval-and :: BoolV BoolV -> BoolV
+;; hace una evaluacion logica de un and entre 2 BoolV o error
+(define (eval-and l r)
+  (match* (l r)
+    [((boolV l)(boolV r)) (boolV (and l r))]
+    [(_ (boolV r)) (error-msg "Boolean" l)]
+    [((boolV l) _) (error-msg "Boolean" r)]))
+
+;; eval-or :: BoolV BoolV -> BoolV
+;; hace una evaluacion logica de un or entre 2 BoolV o error
+(define (eval-or l r)
+  (match* (l r)
+    [((boolV l)(boolV r)) (boolV (or l r))]
+    [(_ (boolV r)) (error-msg "Boolean" l)]
+    [((boolV l) _) (error-msg "Boolean" r)]))
+
+
+;; eval-fst :: PairV -> Val
+;; entrega el primer elemento de un PairV o unerror
+(define (eval-fst expr)
+  (match expr
+    [(pairV l r) l]
+    [_ (error-msg "Pair" expr)]))
+
+;; eval-snd :: PairV -> Val
+;; entrega el segundo elemento de un PairV o un error
+(define (eval-snd expr)
+  (match expr
+    [(pairV l r) r]
+    [_ (error-msg "Pair" expr)]))
+
+;; eval-if :: BoolV -> Boolean
+;; entrega verdadero o falso segun el valor de la condición o un error
+(define (eval-if cond)
+  (match cond
+    [(boolV c) c]
+    [_ (error-msg "Boolean" cond)]))
+
+
+;; generate-new-env :: Env Listof(Expr) Listof(Expr) Listof(FunDef) -> Env
+;; genera un nuevo ambiente para entrar en una función
+(define (generate-new-env env the-args args-expr funs)
+  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) empty-env the-args args-expr))
+
+
+;; look-up :: <sym> listof(FunDef) -> FunDef
+;; searches a function definition within a list of definitions
+(define (look-up f-name l)
+  (match l
+    [(list) (error 'look-up "Undefined function: ~a" f-name)]
+    [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
+
+
 
 
 
@@ -152,73 +252,19 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     [(id x) (env-lookup x env)]
     [(bool b) (boolV b)]
     [(pair l r) (pairV (interp l env funs) (interp r env funs))]
-    [(add1 e)
-     (def expr (interp e env funs))
-     (match expr
-       [(numV n) (numV (+ n 1))]
-       [_ (error (format "Runtime type error: expected Number found ~a" (pp-val expr)))])]
-    [(add l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (numV (+ l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(sub l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (numV (- l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(lt l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (boolV (< l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(eq l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((numV l)(numV r)) (boolV (equal? l r))]
-       [(_ (numV r)) (error (format "Runtime type error: expected Number found ~a" (pp-val left)))]
-       [((numV l) _) (error (format "Runtime type error: expected Number found ~a" (pp-val rigth)))])]
-    [(not-new e)
-     (def expr (interp e env funs))
-     (match expr
-       [(boolV n) (boolV (not n))]
-       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val expr)))])]
-    [(and-new l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((boolV l)(boolV r)) (boolV (and l r))]
-       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
-       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
-    [(or-new l r)
-     (def left (interp l env funs))
-     (def rigth (interp r env funs))
-     (match* (left rigth)
-       [((boolV l)(boolV r)) (boolV (or l r))]
-       [(_ (boolV r)) (error (format "Runtime type error: expected Boolean found ~a" (pp-val left)))]
-       [((boolV l) _) (error (format "Runtime type error: expected Boolean found ~a" (pp-val rigth)))])]
-    [(fst e)
-     (def expr (interp e env funs))
-     (match expr
-       [(pairV l r) l]
-       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
-    [(snd e)
-     (def expr (interp e env funs))
-     (match expr
-       [(pairV l r) r]
-       [_ (error (format "Runtime type error: expected Pair found ~a" (pp-val expr)))])]
-    [(if-new c t f)
-     (def cond (interp c env funs))
-     (match cond
-       [(boolV c) (if c (interp t env funs) (interp f env funs))]
-       [_ (error (format "Runtime type error: expected Boolean found ~a" (pp-val cond)))])]
+    [(add1 e) (eval-add (interp e env funs) (numV 1))]
+    [(add l r) (eval-add (interp l env funs) (interp r env funs))]
+    [(sub l r) (eval-sub (interp l env funs) (interp r env funs))]
+    [(lt l r) (eval-lt (interp l env funs) (interp r env funs))]
+    [(eq l r) (eval-eq (interp l env funs) (interp r env funs))]
+    [(not-new e) (eval-not (interp e env funs))]
+    [(and-new l r) (eval-and (interp l env funs) (interp r env funs))]
+    [(or-new l r) (eval-or (interp l env funs) (interp r env funs))]
+    [(fst e) (eval-fst (interp e env funs))]
+    [(snd e) (eval-snd (interp e env funs))]
+    [(if-new c t f) (if (eval-if (interp c env funs))
+                        (interp t env funs)
+                        (interp f env funs))]
     [(with bindings body)
      (def new-env (foldl (λ (b e) (match b
                                     [(binding id val) (extend-env id (interp val env funs) e)])) env bindings))
@@ -231,10 +277,6 @@ Gramática BNF de la sintaxis concreta del lenguaje.
     ))
 
 
-;; generate-new-env :: Env Listof(Expr)Listof(Expr) Listof(FunDef) -> Env
-;; genera un nuevo ambiente para entrar en una función
-(define (generate-new-env env the-args args-expr funs)
-  (foldl (λ (id val e) (extend-env id (interp val env funs) e)) empty-env the-args args-expr))
 
 
 ;; run :: s-expr -> Val
@@ -245,14 +287,3 @@ Gramática BNF de la sintaxis concreta del lenguaje.
 
 
 
-;; look-up :: <sym> listof(FunDef) -> FunDef
-;; searches a function definition within a list of definitions
-(define (look-up f-name l)
-  (match l
-    [(list) (error 'look-up "Undefined function: ~a" f-name)]
-    [(cons head tail) (if (symbol=? f-name (fundef-name head)) head (look-up f-name tail))]))
-
-(run '{
-  {define {bar {p}} {! p}}
-  {bar #t}
-})
