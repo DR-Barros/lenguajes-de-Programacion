@@ -13,6 +13,7 @@
          | {<CL> <CL>}
          | {fun {<sym>} <CL>}
          | {printn <CL>}
+         | {mfun {<id>} <CL>}
 |#
 (deftype CL
   (num n)
@@ -21,7 +22,8 @@
   (fun id body)
   (id s)
   (app fun-expr arg-expr)
-  (printn e))
+  (printn e)
+  (mfun id body))
 
 ;; parse :: s-expr -> CL
 (define (parse-cl s-expr)
@@ -36,12 +38,14 @@
      (app (fun x (parse-cl b)) (parse-cl e))]
     [(list 'fun (list x) b) (fun x (parse-cl b))]
     [(list 'printn e) (printn (parse-cl e))]
+    [(list 'mfun (list x) b) (mfun x (parse-cl b))]
     [(list f a) (app (parse-cl f) (parse-cl a))]))
 
 ;; values
 (deftype Val
   (numV n)
-  (closV id body env))
+  (closV id body env)
+  (mclosV id body env memo)) ;; nose si agregar la tabla aca
 
 ;; interp :: Expr Env -> Val
 (define (interp expr env)
@@ -58,13 +62,20 @@
       (def (numV n) (interp e env))
       ((print-fn) n)
       (numV n)]
+    [(mfun id body)(mclosV id body env (make-hash))]
     [(app fun-expr arg-expr)
+     (define arg (interp arg-expr env))
      (match (interp fun-expr env)
+       [(mclosV id body fenv memo)
+        (if (hash-has-key? memo arg)
+            (hash-ref memo arg)
+            (let ([result (interp body
+                                  (extend-env id arg fenv))])
+              (hash-set! memo arg result)
+              result))]             
        [(closV id body fenv)
         (interp body
-                (extend-env id
-                            (interp arg-expr env)
-                            fenv))])]))
+                (extend-env id arg fenv))])]))
 
 (define (num+ n1 n2)
   (numV (+ (numV-n n1) (numV-n n2))))
@@ -110,4 +121,11 @@
 
 ;; test parte 1
 (test (interp-p {printn {num 5}}) (result (numV 5) '(5)))
+
+
+;; test parte 2
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble 5} {doble 5})}}) (result (numV 20) '(5)))
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3)))
+(test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3 3)))
+(test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {+ {doble (printn 5)} {doble (printn 3)}})}}) (result (numV 22) '(3 3 5 5 3 3)))
 
