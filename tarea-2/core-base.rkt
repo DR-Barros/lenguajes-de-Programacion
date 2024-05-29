@@ -103,13 +103,17 @@
 
 ;; Parte 1 Testing de efectos
 
-
+;; Result :: Val [Listof Number]
 (deftype Result 
     (result val log))
 
+
+;; print-fn :: (number -> void)
+;; función que imprime el valor de un NumV (number)
 (define print-fn (make-parameter println))
 
-
+;; interp-p :: CL -> Result
+;; interpreta una expresión y retorna un RESULT con el valor final y el log
 (define (interp-p expr)
   (define log (box '()))
   (define (log-print n)
@@ -120,7 +124,37 @@
 
 
 ;; test parte 1
+;; Impresión Sencilla
+(test (interp-p (parse-cl '(printn 10))) (result (numV 10) '(10)))
 (test (interp-p {printn {num 5}}) (result (numV 5) '(5)))
+
+;; Impresión con Operaciones
+(test (interp-p (parse-cl '(printn {+ 1 2}))) (result (numV 3) '(3)))
+(test (interp-p (parse-cl '(printn {+ -1 {+ 2 3}}))) (result (numV 4) '(4)))
+
+
+;; Impresión en Condicionales
+(test (interp-p (parse-cl '(if0 (printn 0) (printn 1) (printn 2)))) (result (numV 1) '(0 1)))
+
+(test (interp-p (parse-cl '(if0 (printn 1) (printn 2) (printn 3)))) (result (numV 3) '(1 3)))
+
+;; Impresión en Funciones
+(test (interp-p (parse-cl '{with {f {fun {x} {printn {+ x 1}}}} {f 5}})) (result (numV 6) '(6)))
+
+(test (interp-p (parse-cl '{with {f {fun {x} {printn {printn x}}}} {f 5}})) (result (numV 5) '(5 5)))
+
+
+;; Impresión en Combinaciones Complejas
+(test (interp-p (parse-cl '{with {inc {fun {x} {printn {+ x 1}}}}
+                                 {with {dec {fun {x} {printn {+ x -1}}}}
+                                       {with {double {mfun {x} {printn {+ x x}}}}
+                                             {+ {double {inc 2}} {double {dec 7}}}}}}))
+      (result (numV 18) '(3 6 6 12)))
+
+(test (interp-p (parse-cl '{with {f {fun {x} {printn {+ x 1}}}}
+                                 {with {g {fun {x} {printn{+ 5 {f x}}}}}
+                                       {g 5}}}))
+      (result (numV 11) '(6 11)))
 
 
 ;; test parte 2
