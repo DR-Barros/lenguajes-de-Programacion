@@ -12,14 +12,8 @@
          | {with {<sym> <SL>} <SL>}
          | <id>
          | {<SL> <SL>}
-         | {fun {<sym> : <mtype>} → <mtype> : <SL>}
+         | {fun <type> {<sym>} <SL>}
          | {printn <SL>}
-
-<mtype> ::= {<mod> <type>} 
-         | <type>          
- 
-<mod> ::= lazy   ; call-by-need / lazy
-        | name   ; call-by-name
 
 <type> ::= Num | {<type> -> <type>}
 
@@ -38,13 +32,7 @@
 
 (deftype Type
   (TNum)
-  (TFun dom cod)
-  (TMod mod type))
-
-(deftype mod
-  (eager)
-  (lazy)
-  (name))
+  (TFun dom cod))
 
 ; sl-type : SL -> Type
 ; accesor polimórfico a la info de tipo de una expr
@@ -69,38 +57,13 @@
     [(list 'if0 c t f) (sif0 #f (parse-sl c) (parse-sl t) (parse-sl f))]
     [(list 'with (list x e) b) (swith #f x (parse-sl e) (parse-sl b))]
     [(list 'printn e) (sprintn #f (parse-sl e))]
-    [(list 'fun (list x ': t1) '-> t2 ': b) (sfun (parse-type (list t1 '-> t2)) x (parse-sl b))]
+    [(list 'fun t (list x) b) (sfun (parse-type t) x (parse-sl b))]
     [(list f a) (sapp #f (parse-sl f) (parse-sl a))]))
 
 (define (parse-type s-expr)
   (match s-expr
     ['Num (TNum)]
-    [(list t1 '-> t2) (TFun (parse-mtype t1) (parse-mtype t2))]
-    [_ (error "Tipo no encontrado")]))
-
-
-
-(define (parse-mtype s-expr)
-  (match s-expr
-    [(list 'lazy t) (TMod (lazy) (parse-type t))]
-    [(list 'name t) (TMod (name) (parse-type t))]
-    ['Num (TMod (eager) (TNum))]
-    [(list t1 '-> t2) (TFun (parse-mtype t1) (parse-mtype t2))]
-    [_ (error "Mtype no encontrado")]))
-
-(define (type-mod-rec t)
-  (match t
-    [(TFun _ rec)
-     (match rec
-       [(TMod x _) x])]
-    [_ (error "Mod type invalid ~a" t)]))
-
-(define (type-mod-dom t)
-  (match t
-    [(TFun dom _)
-     (match dom
-       [(TMod x _) x])]
-    [_ (error "Mod type invalid ~a" t)]))
+    [(list t1 '-> t2) (TFun (parse-type t1) (parse-type t2))]))
 
 ; type->str : Type -> String
 ; representación en string de un tipo
@@ -113,7 +76,7 @@
 ; check-type : Type Type -> Void
 ; falla si los dos tipos no son iguales
 (define (check-type expected actual)
-  (when (not (compatible? expected actual))  ; when es como un if con una sola rama (si la condicion es falsa no evalua nada)
+  (when (not (equal? expected actual))  ; when es como un if con una sola rama (si la condicion es falsa no evalua nada)
     (error (format "type error: expected ~a, got ~a"
                    (type->str expected) (type->str actual)))))
 
@@ -180,84 +143,10 @@
     [(swith _ x e b) (app (fun x (transform b)) (transform e))]
     [(sadd _ l r)    (add (transform l) (transform r))]
     [(sif0 _ c t f)  (if0 (transform c) (transform t) (transform f))]
-    [(sfun t x b)
-     (print (type-mod-rec t))
-     (print (type-mod-dom t))
-     (match (type-mod-rec t)
-       [(eager)(fun x (transform b))]
-       [(lazy) (mfun x (transform b))]
-       [(name) (fun x (transform b))]
-       [_ (error (format "type error: expected a function type, got ~a" (type-mod-rec t)))]
-       )]
+    [(sfun _ x b)    (fun x (transform b))]
     [(sapp _ f a)    (app (transform f) (transform a))]
     [(sprintn _ e)   (printn (transform e))])) 
 
 
 (define (run-sl prog)
   (interp-top (transform (type-ast (parse-sl prog) empty-env))))
-
-
-(define (run-p-sl prog)
-  (interp-p (transform (type-ast (parse-sl prog) empty-env))))
-
-
-(define (compatible? t1 t2)
-  (equal? (type? t1) (type? t2)))
-
-(define (type? t)
-  (match t
-    [(TMod _ t) (type? t)]
-    [_ t]))
-
-;; Test
-(test (type-ast
-        (snum 1 5)
-        empty-env)
-      (snum (TNum) 5))
-
-(test (type-ast
-        (sadd 1 (snum 2 3) (snum 4 5))
-        empty-env)
-      (sadd (TNum) (snum (TNum) 3) (snum (TNum) 5)))
-
-(test (type-ast
-        (sfun (TFun (TMod 'eager (TNum)) (TMod 'eager (TNum))) 'x (sadd 1 (sid 2 'x) (sid 3 'x)))
-        empty-env)
-      (sfun (TFun (TMod 'eager (TNum)) (TMod 'eager (TNum))) 'x (sadd (TNum) (sid (TMod 'eager (TNum)) 'x) (sid (TMod 'eager (TNum)) 'x))))
-
-(test (type-ast
-        (sapp 1 (sfun (TFun (TMod 'eager (TNum)) (TMod 'eager (TNum))) 'x (sadd 1 (sid 2 'x) (sid 3 'x))) (snum 4 5))
-        empty-env)
-      (sapp (TMod 'eager (TNum)) (sfun (TFun (TMod 'eager (TNum)) (TMod 'eager (TNum))) 'x (sadd (TNum) (sid (TMod 'eager (TNum)) 'x) (sid (TMod 'eager (TNum)) 'x))) (snum (TNum) 5)))
-
-(test (type-ast
-        (swith 1 'x (snum 2 5) (sadd 3 (sid 4 'x) (snum 5 6)))
-        empty-env)
-      (swith (TNum) 'x (snum (TNum) 5) (sadd (TNum) (sid (TNum) 'x) (snum (TNum) 6))))
-
-(test (type-ast
-        (sif0 1 (snum 2 0) (snum 3 1) (sadd 4 (snum 5 2) (snum 6 3)))
-        empty-env)
-      (sif0 (TNum) (snum (TNum) 0) (snum (TNum) 1) (sadd (TNum) (snum (TNum) 2) (snum (TNum) 3))))
-
-(test (type-ast
-        (sprintn 1 (snum 2 5))
-        empty-env)
-      (sprintn (TNum) (snum (TNum) 5)))
-
-
-;;
-
-(run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
-                     {f {printn 10}}})
-
-
-(run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
-                     {f {printn 10}}})
-
-
-(run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}} 
-                     {f {printn 10}}})
-
-(run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
-                     {f {printn 10}}})

@@ -62,7 +62,7 @@
       (def (numV n) (interp e env))
       ((print-fn) n)
       (numV n)]
-    [(mfun id body)(mclosV id body env (make-hash))]
+    [(mfun id body)(mclosV id body env (make-hashalw))]
     [(app fun-expr arg-expr)
      (define arg (interp arg-expr env))
      (match (interp fun-expr env)
@@ -158,7 +158,9 @@
 
 
 ;; test parte 2
+;; test de una funcion que usa printn 
 (test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble 5} {doble 5})}}) (result (numV 20) '(5)))
+;; test de una funcion que usa printn y se llama con printn
 (test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3)))
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3 3)))
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {+ {doble (printn 5)} {doble (printn 3)}})}}) (result (numV 22) '(3 3 5 5 3 3)))
