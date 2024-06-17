@@ -1,5 +1,5 @@
 #lang play
-(print-only-errors #t)
+(print-only-errors #f)
 
 (require "env.rkt")
 (require "core-base.rkt")
@@ -88,6 +88,12 @@
     [(list t1 '-> t2) (TFun (parse-mtype t1) (parse-mtype t2))]
     [_ (error "Mtype no encontrado")]))
 
+(define (type-mod t)
+  (match t
+    [(TFun _ _) (type-mod-dom t)]
+    [(TMod x _) x]
+    [(TNum) (eager)]))
+
 (define (type-mod-rec t)
   (match t
     [(TFun _ rec)
@@ -170,28 +176,36 @@
                    (sprintn tnum te)]))
     
 
-; transform : SL -> CL
-; transforma un programa SL a un programa CL equivalente
-; ignora la información de tipo, y traduce un `with` a un aplicación de lambda
 (define (transform expr)
   (match expr
     [(snum _ n)      (num n)]
-    [(sid _ x)       (id x)]
+    [(sid tp x)       
+      ;(print (type-mod tp))
+      (match (type-mod tp)
+        [(eager) (id x)]
+        [(lazy)  (app (id x) (num 0))]
+        [(name)  (app (id x) (num 0))]
+        [_ (error (format "type error: expected a function type, got ~a" (type-mod tp)))]
+        )]
     [(swith _ x e b) (app (fun x (transform b)) (transform e))]
     [(sadd _ l r)    (add (transform l) (transform r))]
     [(sif0 _ c t f)  (if0 (transform c) (transform t) (transform f))]
     [(sfun t x b)
-     (print (type-mod-rec t))
-     (print (type-mod-dom t))
-     (match (type-mod-rec t)
-       [(eager)(fun x (transform b))]
-       [(lazy) (mfun x (transform b))]
-       [(name) (fun x (transform b))]
-       [_ (error (format "type error: expected a function type, got ~a" (type-mod-rec t)))]
-       )]
-    [(sapp _ f a)    (app (transform f) (transform a))]
-    [(sprintn _ e)   (printn (transform e))])) 
-
+      (match (type-mod-dom t)
+        [(eager)(fun x (transform b))]
+        [(lazy) (mfun x (transform b))]
+        [(name) (fun x (transform b))]
+        [_ (error (format "type error: expected a function type, got ~a" (type-mod-rec t)))]
+        )]
+      [(sapp t f a)
+        (def tf (sl-type f))
+        (match (type-mod-dom tf)
+        [(eager)(app (transform f) (transform a))]
+        [(lazy) 
+          (app (transform f) (mfun 0 (transform a)))]
+        [(name) (app (transform f) (fun 0 (transform a)))]
+        [_ (error (format "type error: expected a function type, got ~a"(type-mod-dom tf)))])]
+      [(sprintn _ e)   (printn (transform e))]))
 
 (define (run-sl prog)
   (interp-top (transform (type-ast (parse-sl prog) empty-env))))
@@ -246,18 +260,42 @@
       (sprintn (TNum) (snum (TNum) 5)))
 
 
-;;
+;; Testear
 
-(run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
+(test (run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
+                     {f {printn 10}}}) (result (numV 20) '(10)))
+
+
+(test (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
+                     {f {printn 10}}}) (result (numV 20) '(10)))
+
+
+(test (run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}} 
+                     {f {printn 10}}}) (result (numV 20) '(10 10)))
+
+(test (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
+                     {f {printn 10}}}) (result (numV 1) '()))
+(test (run-p-sl '{with {f {fun {x : {name Num}} -> Num : 1}}   
+                     {f {printn 10}}}) (result (numV 1) '()))
+(test (run-p-sl '{with {f {fun {x : Num} -> Num : 1}}   
+                     {f {printn 10}}}) (result (numV 1) '(10)))
+
+{transform (type-ast (parse-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
                      {f {printn 10}}})
+                     empty-env)}
 
-
-(run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
+{transform (type-ast (parse-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
                      {f {printn 10}}})
+                     empty-env)}
 
-
-(run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}} 
+{transform (type-ast (parse-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
                      {f {printn 10}}})
+                     empty-env)}
 
+(run-p-sl '{with {f {fun {x : Num} -> Num : {printn x}}}   
+                     {f 10}})
 (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
                      {f {printn 10}}})
+
+(interp-p
+ (app (fun 'f (app (id 'f) (printn (num 10)))) (fun 'x (add (id 'x) (id 'x)))))

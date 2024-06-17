@@ -164,4 +164,3 @@
 (test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3)))
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3 3)))
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {+ {doble (printn 5)} {doble (printn 3)}})}}) (result (numV 22) '(3 3 5 5 3 3)))
-
