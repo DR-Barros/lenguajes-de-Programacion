@@ -1,5 +1,5 @@
 #lang play
-(print-only-errors #f)
+(print-only-errors #t)
 
 (require "env.rkt")
 (require "core-base.rkt")
@@ -199,11 +199,17 @@
         )]
       [(sapp t f a)
         (def tf (sl-type f))
+        #| (def (app (id df) da) (transform f))
+        (print df)
+        (print (transform f)) |#
         (match (type-mod-dom tf)
         [(eager)(app (transform f) (transform a))]
         [(lazy) 
-          (app (transform f) (mfun 0 (transform a)))]
-        [(name) (app (transform f) (fun 0 (transform a)))]
+          (def (app (id df) da) (transform f))
+          (app (id df) (mfun 'x (transform a)))]
+        [(name) 
+          (def (app (id df) da) (transform f))
+          (app (id df) (fun 'x (transform a)))]
         [_ (error (format "type error: expected a function type, got ~a"(type-mod-dom tf)))])]
       [(sprintn _ e)   (printn (transform e))]))
 
@@ -280,22 +286,39 @@
 (test (run-p-sl '{with {f {fun {x : Num} -> Num : 1}}   
                      {f {printn 10}}}) (result (numV 1) '(10)))
 
-{transform (type-ast (parse-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
-                     {f {printn 10}}})
-                     empty-env)}
+;; test de run-p-sl con funciones anidadas para probar el manejo de los modificador de tipo
+(test (run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}   
+                     {with {g {fun {y : Num} -> Num : {f {+ y y}}}}
+                          {g {printn 10}}}}) (result (numV 40) '(10)))
 
-{transform (type-ast (parse-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
-                     {f {printn 10}}})
-                     empty-env)}
+(test (run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}  
+                     {with {g {fun {y : {lazy Num}} -> Num : {f {+ y y}}}}
+                          {g {printn 10}}}}) (result (numV 40) '(10)))
 
-{transform (type-ast (parse-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
-                     {f {printn 10}}})
-                     empty-env)}
+(test (run-p-sl '{with {f {fun {x : Num} -> Num : {+ x x}}}
+                      {with {g {fun {y : {name Num}} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10 10)))
 
-(run-p-sl '{with {f {fun {x : Num} -> Num : {printn x}}}   
-                     {f 10}})
-(run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : 1}}   
-                     {f {printn 10}}})
+(test (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}   
+                      {with {g {fun {y : Num} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10)))      
 
-(interp-p
- (app (fun 'f (app (id 'f) (printn (num 10)))) (fun 'x (add (id 'x) (id 'x)))))
+(test (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}
+                      {with {g {fun {y : {lazy Num}} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10)))
+
+(test (run-p-sl '{with {f {fun {x : {lazy Num}} -> Num : {+ x x}}}
+                      {with {g {fun {y : {name Num}} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10 10)))
+
+(test (run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}}
+                      {with {g {fun {y : Num} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10)))
+
+(test (run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}}
+                      {with {g {fun {y : {lazy Num}} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10)))
+
+(test (run-p-sl '{with {f {fun {x : {name Num}} -> Num : {+ x x}}}
+                      {with {g {fun {y : {name Num}} -> Num : {f {+ y y}}}}
+                            {g {printn 10}}}}) (result (numV 40) '(10 10 10 10)))

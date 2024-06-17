@@ -132,6 +132,10 @@
 (test (interp-p (parse-cl '(printn {+ 1 2}))) (result (numV 3) '(3)))
 (test (interp-p (parse-cl '(printn {+ -1 {+ 2 3}}))) (result (numV 4) '(4)))
 
+;; impresión en Orden de Evaluación de izquierda a derecha
+(test (interp-p (parse-cl '(printn {+ {printn 1} {printn 2}}))) (result (numV 3) '(1 2 3)))
+(test (interp-p (parse-cl '(printn {+ {printn 1} {+ {printn 2} {printn 3}}})))(result (numV 6) '(1 2 3 6)))
+
 
 ;; Impresión en Condicionales
 (test (interp-p (parse-cl '(if0 (printn 0) (printn 1) (printn 2)))) (result (numV 1) '(0 1)))
@@ -157,10 +161,40 @@
       (result (numV 11) '(6 11)))
 
 
+
 ;; test parte 2
-;; test de una funcion que usa printn 
+;; test de una funcion memoizadas que usa printn para probar que se imprime solo una vez
 (test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble 5} {doble 5})}}) (result (numV 20) '(5)))
-;; test de una funcion que usa printn y se llama con printn
+;; se prueba que para 2 funciones memoizadas distintas se imprime 2 veces
+(test (interp-p {parse-cl '{
+  with {doble {mfun {n} {+ (printn n) n}}}
+  {with {doble2 {mfun {n} {+ (printn n) n}}}
+  (+ {doble 5} {doble2 5})}}}) (result (numV 20) '(5 5) ))
+
+;; se prueba que al cambiar de valor se imprime el nuevo valor
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble 5} {doble 3})}}) (result (numV 16) '(5 3)))
+
+;; test de una funcion que usa printn y se llama con printn (solo se imprime una vez el print dentero de la funcion)
 (test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3)))
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3 3)))
+;; test que evalua que para mfun se memoriza de la misma forma si se usa printn como solo el valor
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {doble (printn 3)})}}) (result (numV 12) '(3 3 3)))
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble 3} {doble (printn 3)})}}) (result (numV 12) '(3 3)))
+;; test de una funcion que usa printn y se llama con printn (solo se imprime una vez el print dentero de la funcion)
 (test (interp-p {parse-cl '{with {doble {fun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {+ {doble (printn 5)} {doble (printn 3)}})}}) (result (numV 22) '(3 3 5 5 3 3)))
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}} (+ {doble (printn 3)} {+ {doble (printn 5)} {doble 3}})}}) (result (numV 22) '(3 3 5 5)))
+
+;; test de uso complejo de funciones memoizadas
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}}
+                           {with {cuatruple {mfun {n} {+ {doble n} {doble n}}}}
+                                 {+ {cuatruple 5} {cuatruple 5}}}}}) (result (numV 40) '(5)))
+                                 
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}}
+                           {with {cuatruple {mfun {n} {+ {doble n} {doble n}}}}
+                                 {+ {doble 5} {+ {cuatruple 5} {cuatruple 5}}}}}}) (result (numV 50) '(5)))                                     
+
+(test (interp-p {parse-cl '{with {doble {mfun {n} {+ (printn n) n}}}
+                            {with {cuatruple {mfun {n} {+ {doble n} {doble n}}}}
+                                  {+ {cuatruple 5} {cuatruple 3}}}}}) (result (numV 32) '(5 3)))
+
+                              
